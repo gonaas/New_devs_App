@@ -25,3 +25,20 @@ async def test_month_bounds_use_property_timezone():
 
     assert march == Decimal("2250.00")
     assert february == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_total_is_quantized_to_two_decimals():
+    result = await reservations.calculate_total_revenue("prop-001", "tenant-a")
+
+    assert result["total"] == "2250.00"
+
+
+@pytest.mark.asyncio
+async def test_total_rounds_half_up_once_at_the_end(extra_reservation):
+    # prop-005 seed total is 3256.000; adding 0.005 gives exactly 3256.005 -> 3256.01
+    await extra_reservation("res-half-up", "prop-005", "tenant-b", "0.005")
+
+    result = await reservations.calculate_total_revenue("prop-005", "tenant-b")
+
+    assert result["total"] == "3256.01"
