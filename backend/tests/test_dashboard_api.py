@@ -22,6 +22,15 @@ def make_client(tenant_id):
     return TestClient(make_app(tenant_id))
 
 
+@pytest.mark.parametrize("tenant_id", [None, ""])
+def test_summary_rejects_user_without_tenant(tenant_id):
+    client = make_client(tenant_id)
+
+    response = client.get("/api/v1/dashboard/summary", params={"property_id": "prop-001"})
+
+    assert response.status_code == 403
+
+
 @pytest.mark.asyncio
 async def test_summary_returns_total_revenue_as_number(fake_redis):
     app = make_app("tenant-a")
