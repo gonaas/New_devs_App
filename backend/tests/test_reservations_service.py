@@ -15,3 +15,13 @@ async def test_database_failure_surfaces_instead_of_returning_mock_data(monkeypa
 
     with pytest.raises(Exception):
         await reservations.calculate_total_revenue("prop-001", "tenant-a")
+
+
+@pytest.mark.asyncio
+async def test_month_bounds_use_property_timezone():
+    # res-tz-1 checks in 2024-02-29 23:30 UTC = 2024-03-01 00:30 in Europe/Paris.
+    march = await reservations.calculate_monthly_revenue("prop-001", "tenant-a", 3, 2024)
+    february = await reservations.calculate_monthly_revenue("prop-001", "tenant-a", 2, 2024)
+
+    assert march == Decimal("2250.00")
+    assert february == Decimal("0.00")

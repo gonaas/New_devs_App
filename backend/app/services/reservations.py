@@ -1,35 +1,32 @@
-from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, List
 
-async def calculate_monthly_revenue(property_id: str, month: int, year: int, db_session=None) -> Decimal:
+async def calculate_monthly_revenue(property_id: str, tenant_id: str, month: int, year: int, db_session=None) -> Decimal:
     """
-    Calculates revenue for a specific month.
+    Calculates revenue for a specific month, using the property's local timezone
+    to decide which month a check-in belongs to.
     """
+    print(f"DEBUG: Querying revenue for {property_id} for {year}-{month:02d}")
 
-    start_date = datetime(year, month, 1)
-    if month < 12:
-        end_date = datetime(year, month + 1, 1)
-    else:
-        end_date = datetime(year + 1, 1, 1)
-        
-    print(f"DEBUG: Querying revenue for {property_id} from {start_date} to {end_date}")
-
-    # SQL Simulation (This would be executed against the actual DB)
     query = """
-        SELECT SUM(total_amount) as total
-        FROM reservations
-        WHERE property_id = $1
-        AND tenant_id = $2
-        AND check_in_date >= $3
-        AND check_in_date < $4
+        SELECT SUM(r.total_amount) as total
+        FROM reservations r
+        JOIN properties p ON p.id = r.property_id AND p.tenant_id = r.tenant_id
+        WHERE r.property_id = $1
+        AND r.tenant_id = $2
+        AND (r.check_in_date AT TIME ZONE p.timezone) >= make_timestamp($3, $4, 1, 0, 0, 0)
+        AND (r.check_in_date AT TIME ZONE p.timezone) < make_timestamp($3, $4, 1, 0, 0, 0) + interval '1 month'
     """
-    
-    # In production this query executes against a database session.
-    # result = await db.fetch_val(query, property_id, tenant_id, start_date, end_date)
-    # return result or Decimal('0')
-    
-    return Decimal('0') # Placeholder for now until DB connection is finalized
+
+    from app.core.database_pool import db_pool
+
+    if db_pool.pool is None:
+        await db_pool.initialize()
+
+    async with db_pool.get_session() as conn:
+        total = await conn.fetchval(query, property_id, tenant_id, year, month)
+
+    return Decimal(str(total or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str, Any]:
     """
